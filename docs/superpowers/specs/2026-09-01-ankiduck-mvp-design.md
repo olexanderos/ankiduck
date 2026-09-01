@@ -71,15 +71,25 @@ pure functions in `lib/apkg/`, testable without a real worker.
    older Anki versions' checked."
 3. **Load into sql.js**: the collection SQLite file's bytes go directly into
    a new `sql.js` `Database`.
-4. **Schema detection & extraction**, normalized to one internal shape
-   regardless of source schema:
-   - Legacy (`anki2`): `SELECT decks, models FROM col` → parse the JSON
-     blobs for deck names/hierarchy and note-type templates/fields/CSS.
-     Notes/cards come from the `notes`/`cards` tables.
-   - Modern (`anki21`, detected by the presence of a `notetypes` table
-     rather than a specific schema version number, which varies across Anki
-     releases): decks/models come from the normalized
-     `decks`/`notetypes`/`templates`/`fields` tables instead of JSON blobs.
+4. **Schema detection & extraction**, normalized to one internal shape:
+   - Legacy (`anki2`, detected by the *absence* of a `notetypes` table):
+     `SELECT decks, models FROM col` → parse the JSON blobs for deck
+     names/hierarchy and note-type templates/fields/CSS (all plain
+     text/JSON). Notes/cards come from the `notes`/`cards` tables. **This
+     is the only schema MVP fully supports.**
+   - Modern (`anki21`, schema 15+, detected by the presence of a
+     `notetypes` table): confirmed during planning that this schema stores
+     note-type templates/CSS/field config as **protobuf-encoded blobs**
+     (`notetypes.config`, `templates.config`, `fields.config`), not plain
+     text — only the `name` columns are plain. Decoding this would require
+     a new dependency (`protobufjs`) plus a hand-vendored subset of Anki's
+     `notetypes.proto`. Since a card can't render without its note type's
+     templates, and this predates (is unrelated to) the already-excluded
+     zstd/`anki21b` format, **MVP treats any apkg using this schema as an
+     explicit unsupported-format error**, same message class as the zstd
+     case: "this deck uses a newer note-type format Ankiduck doesn't
+     support yet — re-export from Anki with 'Support older Anki versions'
+     checked." Protobuf decoding is deferred past MVP.
 5. **Media**: read the zip's `media` file (JSON mapping `"0", "1", ...` to
    real filenames), pull each numbered zip entry as a `Blob` keyed by its
    real filename.
