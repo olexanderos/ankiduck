@@ -12,13 +12,12 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.13.3",
-    "@types/pngjs": "^6.0.5",
     "@types/sql.js": "^1.4.11",
     "fake-indexeddb": "^6.2.5",
-    "pngjs": "^7.0.0",
     "svelte": "^5.56.10",
     "svelte-check": "^4.7.6",
     "typescript": "~6.0.2",
