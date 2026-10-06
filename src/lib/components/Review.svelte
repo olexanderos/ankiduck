@@ -18,6 +18,21 @@
   let currentCid: number | null = $state(null);
   let loading = $state(true);
   let mediaUrls: string[] = [];
+  // One element for every sound: iOS unlocks a media element per user gesture, so a
+  // fresh <audio> per card soon stopped playing. This one stays unlocked once played.
+  const player = new Audio();
+
+  function playSound(url: string) {
+    player.src = url;
+    player.play().catch(() => {
+      // Autoplay was blocked; the card's 🔊 button still lets the user play it manually.
+    });
+  }
+
+  function onCardClick(event: MouseEvent) {
+    const button = (event.target as Element).closest<HTMLElement>('[data-sound]');
+    if (button?.dataset.sound) playSound(button.dataset.sound);
+  }
 
   async function loadQueue() {
     const db = await openAnkiduckDb();
@@ -29,6 +44,7 @@
   }
 
   function revokeMediaUrls() {
+    player.pause(); // its src may be one of the URLs about to be revoked
     mediaUrls.forEach((url) => URL.revokeObjectURL(url));
     mediaUrls = [];
   }
@@ -86,10 +102,8 @@
   async function reveal() {
     revealed = true;
     await tick(); // wait for {@html backHtml} to be in the DOM before querying it
-    const audio = document.querySelector<HTMLAudioElement>('.review-card audio.ankiduck-audio');
-    audio?.play().catch(() => {
-      // iOS autoplay was blocked; the visible replay control still lets the user play it manually.
-    });
+    const sound = document.querySelector<HTMLElement>('.review-card [data-sound]');
+    if (sound?.dataset.sound) playSound(sound.dataset.sound);
   }
 
   async function grade(g: Grade) {
@@ -117,7 +131,8 @@
       <p class="done">All done for now!</p>
     {/if}
   {:else}
-    <div class="review-card">
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="review-card" onclick={onCardClick}>
       {@html revealed ? backHtml : frontHtml}
     </div>
 
@@ -156,6 +171,10 @@
     justify-content: center;
     text-align: center;
     padding: 1rem;
+  }
+  .review-card :global(.ankiduck-sound) {
+    font-size: 1.5rem;
+    padding: 0.25rem 0.75rem;
   }
   /* Stays on screen even when a long card makes the page scroll. */
   .actions {

@@ -129,10 +129,10 @@ describe('substituteCloze', () => {
 });
 
 describe('rewriteMediaTokens', () => {
-  it('replaces a [sound:] token with an audio element pointing at the resolved URL', () => {
+  it('replaces a [sound:] token with a replay button carrying the resolved URL', () => {
     const map = new Map([['hej.mp3', 'blob:abc']]);
     expect(rewriteMediaTokens('[sound:hej.mp3]', map)).toBe(
-      '<audio class="ankiduck-audio" data-autoplay="true" controls src="blob:abc"></audio>'
+      '<button type="button" class="ankiduck-sound" data-sound="blob:abc" aria-label="Play audio">🔊</button>'
     );
   });
 

@@ -87,7 +87,9 @@ export function rewriteMediaTokens(html: string, mediaUrlMap: Map<string, string
   let result = html.replace(SOUND_RE, (_match, filename: string) => {
     const url = mediaUrlMap.get(filename);
     if (!url) return '';
-    return `<audio class="ankiduck-audio" data-autoplay="true" controls src="${url}"></audio>`;
+    // A button, not an <audio>: iOS needs a user gesture to unlock each new media
+    // element, so the review screen plays every sound through one shared element.
+    return `<button type="button" class="ankiduck-sound" data-sound="${url}" aria-label="Play audio">🔊</button>`;
   });
   result = result.replace(IMG_SRC_RE, (full: string, attrs: string, src: string) => {
     const url = mediaUrlMap.get(src);
