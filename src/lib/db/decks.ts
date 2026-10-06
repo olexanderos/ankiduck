@@ -92,12 +92,15 @@ export async function getSessionQueueForDeck(
   deckIds: number[],
   now: number = Date.now()
 ): Promise<QueueCard[]> {
-  const cards = await db.getAll('cards');
-  const relevant = cards.filter((c) => deckIds.includes(c.did));
-  const states = await Promise.all(relevant.map((c) => db.get('cardState', c.cid)));
-  const queueCards: QueueCard[] = states
-    .filter((s): s is NonNullable<typeof s> => !!s)
-    .map((s) => ({ cid: s.cid, queue: s.queue, due: s.due }));
+  const [cards, states] = await Promise.all([db.getAll('cards'), db.getAll('cardState')]);
+  const stateByCid = new Map(states.map((s) => [s.cid, s]));
+  const wantedDids = new Set(deckIds);
+  const queueCards: QueueCard[] = [];
+  for (const card of cards) {
+    if (!wantedDids.has(card.did)) continue;
+    const state = stateByCid.get(card.cid);
+    if (state) queueCards.push({ cid: card.cid, nid: card.nid, queue: state.queue, due: state.due });
+  }
   return buildSessionQueue(queueCards, now);
 }
 
