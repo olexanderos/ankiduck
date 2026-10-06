@@ -73,6 +73,16 @@ export function substituteCloze(
 const SOUND_RE = /\[sound:([^\]]+)\]/g;
 const IMG_SRC_RE = /<img([^>]*)\ssrc="([^"]+)"/g;
 
+/** Media filenames a note's fields point at, so a card loads only its own media blobs. */
+export function referencedMediaFilenames(fieldValues: string[]): string[] {
+  const names = new Set<string>();
+  for (const value of fieldValues) {
+    for (const m of value.matchAll(SOUND_RE)) names.add(m[1]);
+    for (const m of value.matchAll(IMG_SRC_RE)) names.add(m[2]);
+  }
+  return [...names];
+}
+
 export function rewriteMediaTokens(html: string, mediaUrlMap: Map<string, string>): string {
   let result = html.replace(SOUND_RE, (_match, filename: string) => {
     const url = mediaUrlMap.get(filename);

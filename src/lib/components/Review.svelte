@@ -3,7 +3,7 @@
   import { openAnkiduckDb } from '../db/schema';
   import { getSessionQueueForDeck } from '../db/decks';
   import { gradeCard } from '../db/cardState';
-  import { renderCard } from '../template/render';
+  import { renderCard, referencedMediaFilenames } from '../template/render';
   import { nextState } from '../scheduler/schedule';
   import type { Grade, Note, NoteType, Card, CardState } from '../types';
 
@@ -16,6 +16,8 @@
   let backHtml = $state('');
   let previews: Record<Grade, string> = $state({ again: '', hard: '', good: '', easy: '' });
   let currentCid: number | null = $state(null);
+  let loading = $state(true);
+  let mediaUrls: string[] = [];
 
   async function loadQueue() {
     const db = await openAnkiduckDb();
@@ -26,26 +28,43 @@
     await loadCurrentCard();
   }
 
+  function revokeMediaUrls() {
+    mediaUrls.forEach((url) => URL.revokeObjectURL(url));
+    mediaUrls = [];
+  }
+
   async function loadCurrentCard() {
-    revealed = false;
+    loading = true;
     if (currentIndex >= queueCids.length) {
+      revokeMediaUrls();
       currentCid = null;
+      loading = false;
       return;
     }
-    currentCid = queueCids[currentIndex];
+    const cid = queueCids[currentIndex];
 
     const db = await openAnkiduckDb();
-    const card = (await db.get('cards', currentCid)) as Card;
+    const card = (await db.get('cards', cid)) as Card;
     const note = (await db.get('notes', card.nid)) as Note;
     const noteType = (await db.get('noteTypes', note.mid)) as NoteType;
-    const mediaFiles = await db.getAll('media');
-    const state = (await db.get('cardState', currentCid)) as CardState;
+    // Only this note's media: loading every blob in the deck per card made each card take seconds.
+    const mediaFiles = await Promise.all(referencedMediaFilenames(note.fields).map((name) => db.get('media', name)));
+    const state = (await db.get('cardState', cid)) as CardState;
     db.close();
 
-    const mediaUrlMap = new Map(mediaFiles.map((m) => [m.filename, URL.createObjectURL(m.blob)]));
+    revokeMediaUrls();
+    const mediaUrlMap = new Map<string, string>();
+    for (const m of mediaFiles) {
+      if (!m) continue;
+      const url = URL.createObjectURL(m.blob);
+      mediaUrlMap.set(m.filename, url);
+      mediaUrls.push(url);
+    }
     const rendered = renderCard(note, noteType, card.ord, mediaUrlMap);
     frontHtml = rendered.front;
     backHtml = rendered.back;
+    revealed = false;
+    currentCid = cid;
 
     const grades: Grade[] = ['again', 'hard', 'good', 'easy'];
     const nextPreviews: Record<Grade, string> = { again: '', hard: '', good: '', easy: '' };
@@ -53,6 +72,7 @@
       nextPreviews[grade] = formatIntervalPreview(nextState(state, grade));
     }
     previews = nextPreviews;
+    loading = false;
   }
 
   function formatIntervalPreview(state: CardState): string {
@@ -73,7 +93,7 @@
   }
 
   async function grade(g: Grade) {
-    if (currentCid === null) return;
+    if (currentCid === null || loading) return;
     const db = await openAnkiduckDb();
     await gradeCard(db, currentCid, g);
     db.close();
@@ -83,6 +103,7 @@
 
   $effect(() => {
     loadQueue();
+    return revokeMediaUrls;
   });
 </script>
 
@@ -92,33 +113,41 @@
   </header>
 
   {#if currentCid === null}
-    <p class="done">All done for now!</p>
+    {#if !loading}
+      <p class="done">All done for now!</p>
+    {/if}
   {:else}
     <div class="review-card">
       {@html revealed ? backHtml : frontHtml}
     </div>
 
-    {#if !revealed}
-      <button class="show-answer" onclick={reveal}>Show Answer</button>
-    {:else}
-      <div class="grades">
-        <button onclick={() => grade('again')}>Again<span>{previews.again}</span></button>
-        <button onclick={() => grade('hard')}>Hard<span>{previews.hard}</span></button>
-        <button onclick={() => grade('good')}>Good<span>{previews.good}</span></button>
-        <button onclick={() => grade('easy')}>Easy<span>{previews.easy}</span></button>
-      </div>
-    {/if}
+    <div class="actions">
+      {#if !revealed}
+        <button class="show-answer" onclick={reveal}>Show Answer</button>
+      {:else}
+        <div class="grades">
+          <button disabled={loading} onclick={() => grade('again')}>Again<span>{previews.again}</span></button>
+          <button disabled={loading} onclick={() => grade('hard')}>Hard<span>{previews.hard}</span></button>
+          <button disabled={loading} onclick={() => grade('good')}>Good<span>{previews.good}</span></button>
+          <button disabled={loading} onclick={() => grade('easy')}>Easy<span>{previews.easy}</span></button>
+        </div>
+      {/if}
+    </div>
   {/if}
 </section>
 
 <style>
   .review {
+    /* Fill #app (already sized to the visible screen) instead of 100vh, which
+       ignored the body's safe-area padding and pushed the buttons below the fold. */
+    flex: 1;
+    box-sizing: border-box;
+    width: 100%;
     max-width: 480px;
     margin: 0 auto;
-    padding: 1rem;
+    padding: 1rem 1rem 0;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
   }
   .review-card {
     flex: 1;
@@ -128,7 +157,15 @@
     text-align: center;
     padding: 1rem;
   }
+  /* Stays on screen even when a long card makes the page scroll. */
+  .actions {
+    position: sticky;
+    bottom: var(--safe-bottom);
+    padding: 0.5rem 0 1rem;
+    background: var(--bg);
+  }
   .show-answer {
+    width: 100%;
     padding: 1rem;
     font-size: 1.1rem;
   }

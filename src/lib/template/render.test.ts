@@ -3,6 +3,7 @@ import {
   substituteFields,
   applyConditionals,
   renderCloze,
+  referencedMediaFilenames,
   substituteCloze,
   rewriteMediaTokens,
   wrapWithCss,
@@ -190,5 +191,16 @@ describe('renderCard', () => {
   it('wraps both sides in the note type CSS', () => {
     const { front } = renderCard(note, noteType, 0, new Map());
     expect(front).toContain('<style>.ankiduck-card { color: black; }</style>');
+  });
+});
+
+describe('referencedMediaFilenames', () => {
+  it('collects sound and image filenames across all fields, without duplicates', () => {
+    const fields = ['Hej [sound:hej.mp3]', '<img src="a.jpg"> [sound:hej.mp3]', '[sound:b.mp3]'];
+    expect(referencedMediaFilenames(fields).sort()).toEqual(['a.jpg', 'b.mp3', 'hej.mp3']);
+  });
+
+  it('returns nothing for fields without media', () => {
+    expect(referencedMediaFilenames(['plain', ''])).toEqual([]);
   });
 });
